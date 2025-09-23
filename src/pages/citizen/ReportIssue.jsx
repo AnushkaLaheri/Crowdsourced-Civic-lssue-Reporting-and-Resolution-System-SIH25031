@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef} from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet"
@@ -18,25 +18,29 @@ import {
 import Navbar from "../../components/Navbar"
 import { useAuth } from "../../contexts/AuthContext"
 import "leaflet/dist/leaflet.css"
+import axios from "axios"
+import { getAuth } from "firebase/auth"
 
 const ReportIssue = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [step, setStep] = useState(1)
   const [listening, setListening] = useState(false)
-const [voiceError, setVoiceError] = useState("")
-const recognitionRef = useRef(null)
+  const [voiceError, setVoiceError] = useState("")
+  const recognitionRef = useRef(null)
+  const [loading, setLoading] = useState(false)
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     category: "",
     priority: "Medium",
     location: { lat: 23.3441, lng: 85.3096 },
+    city: "Deoghar",
     address: "",
-    images: [],
+    images: [], // store File objects here
     token: "",
   })
-  const [loading, setLoading] = useState(false)
 
   const categories = [
     "Infrastructure",
@@ -53,12 +57,10 @@ const recognitionRef = useRef(null)
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value })
 
+  // Handle image upload with actual File objects
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files)
-    setFormData({
-      ...formData,
-      images: [...formData.images, ...files.map((file) => URL.createObjectURL(file))],
-    })
+    setFormData({ ...formData, images: [...formData.images, ...files] })
   }
 
   const removeImage = (index) => {
@@ -68,67 +70,61 @@ const recognitionRef = useRef(null)
     })
   }
 
-  // Voice-to-Text Handler with animated mic feedback
+  // Voice-to-text
   const handleVoiceToText = () => {
-  if (!("webkitSpeechRecognition" in window)) {
-    alert("Voice recognition not supported in this browser")
-    return
+    if (!("webkitSpeechRecognition" in window)) {
+      alert("Voice recognition not supported in this browser")
+      return
+    }
+
+    const recognition = new window.webkitSpeechRecognition()
+    recognitionRef.current = recognition
+    recognition.lang = "en-IN"
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+
+    recognition.onstart = () => {
+      setListening(true)
+      setVoiceError("")
+    }
+
+    recognition.onend = () => {
+      setListening(false)
+    }
+
+    recognition.onresult = (event) => {
+      const text = event.results[0][0].transcript
+      setFormData((prev) => ({
+        ...prev,
+        description: prev.description ? prev.description + " " + text : text,
+      }))
+    }
+
+    recognition.onerror = (event) => {
+      setListening(false)
+      if (event.error === "no-speech") {
+        setVoiceError("No voice detected. Please speak clearly.")
+      } else if (event.error === "not-allowed") {
+        setVoiceError("Microphone access denied. Please allow it in browser settings.")
+      } else {
+        setVoiceError("Voice input failed: " + event.error)
+      }
+    }
+
+    try {
+      recognition.start()
+    } catch (err) {
+      console.error("Voice recognition start failed", err)
+      setVoiceError("Could not start voice recognition.")
+    }
   }
 
-  const recognition = new window.webkitSpeechRecognition()
-  recognitionRef.current = recognition
-  recognition.lang = "en-IN"
-  recognition.interimResults = false
-  recognition.maxAlternatives = 1
-
-  recognition.onstart = () => {
-    setListening(true)
-    setVoiceError("")
-  }
-
-  recognition.onend = () => {
+  const stopVoiceRecognition = () => {
+    if (recognitionRef.current) recognitionRef.current.stop()
     setListening(false)
   }
 
-  recognition.onresult = (event) => {
-    const text = event.results[0][0].transcript
-    setFormData((prev) => ({
-      ...prev,
-      description: prev.description ? prev.description + " " + text : text,
-    }))
-  }
-
- recognition.onerror = (event) => {
-  setListening(false)
-  if (event.error === "no-speech") {
-    setVoiceError("No voice detected. Please speak clearly after clicking.")
-  } else if (event.error === "not-allowed") {
-    setVoiceError("Microphone access denied. Please allow it in browser settings.")
-  } else {
-    setVoiceError("Voice input failed: " + event.error)
-  }
-}
-
-
-  try {
-    recognition.start()
-  } catch (err) {
-    console.error("Voice recognition start failed", err)
-    setVoiceError("Could not start voice recognition.")
-  }
-}
-
-// Optional: stop manually
-const stopVoiceRecognition = () => {
-  if (recognitionRef.current) {
-    recognitionRef.current.stop()
-    setListening(false)
-  }
-}
-
-
-  const generateToken = () => "TOK" + Math.random().toString(36).substr(2, 6).toUpperCase()
-
+  // Map picker
   const LocationPicker = () => {
     useMapEvents({
       click(e) {
@@ -138,14 +134,45 @@ const stopVoiceRecognition = () => {
     return null
   }
 
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"
+
+  // Submit handler
   const handleSubmit = async () => {
     setLoading(true)
-    const token = generateToken()
-    setFormData({ ...formData, token })
-    setTimeout(() => {
+    try {
+      const auth = getAuth()
+      const currentUser = auth.currentUser
+      if (!currentUser) throw new Error("User not logged in")
+      const token = await currentUser.getIdToken()
+
+      const form = new FormData()
+      form.append("title", formData.title)
+      form.append("category", formData.category)
+      form.append("priority", formData.priority)
+      form.append("description", formData.description)
+      form.append("address", formData.address || "Unknown Address")
+      form.append("lat", formData.location.lat)
+      form.append("lon", formData.location.lng)
+      form.append("city", formData.city)
+
+      formData.images.forEach((file) => form.append("media", file))
+
+      const res = await axios.post(`${BACKEND_URL}/report-issue`, form, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      })
+
+      console.log("Backend response:", res.data)
+      setFormData(prev => ({ ...prev, token: res.data.token }))
       setStep(6)
+    } catch (err) {
+      console.error("Issue submission failed:", err.response?.data || err)
+      alert(err.response?.data?.error || err.message)
+    } finally {
       setLoading(false)
-    }, 1500)
+    }
   }
 
   const nextStep = () => setStep((prev) => Math.min(prev + 1, 6))
@@ -174,7 +201,7 @@ const stopVoiceRecognition = () => {
           </div>
         )}
 
-        {/* Success Step */}
+        {/* Success */}
         {step === 6 && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -204,6 +231,7 @@ const stopVoiceRecognition = () => {
                     category: "",
                     priority: "Medium",
                     location: { lat: 23.3441, lng: 85.3096 },
+                    city: "Deoghar",
                     address: "",
                     images: [],
                     token: "",
@@ -217,99 +245,39 @@ const stopVoiceRecognition = () => {
           </motion.div>
         )}
 
+        {/* Steps */}
         {step !== 6 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-gradient-to-br from-white to-neutral-50 dark:from-neutral-800 dark:to-neutral-900 rounded-2xl p-8 shadow-lg border border-neutral-200 dark:border-neutral-700"
           >
-            {/* Step 1: Basic Info */}
+            {/* Step 1 */}
             {step === 1 && (
               <div className="space-y-6">
                 <div className="flex items-center gap-3 mb-4">
                   <ExclamationTriangleIcon className="h-6 w-6 text-blue-600" />
                   <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">Basic Information</h2>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium">
-                    Issue Title <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="title"
-                    value={formData.title}
-                    onChange={handleChange}
-                    className="mt-2 w-full px-4 py-3 border rounded-xl bg-white dark:bg-neutral-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium">
-                    Category <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    className="mt-2 w-full px-4 py-3 border rounded-xl bg-white dark:bg-neutral-800"
-                  >
-                    <option value="">Select Category</option>
-                    {categories.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium">
-                    Priority <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="priority"
-                    value={formData.priority}
-                    onChange={handleChange}
-                    className="mt-2 w-full px-4 py-3 border rounded-xl bg-white dark:bg-neutral-800"
-                  >
-                    {priorities.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="mb-4">
-  <label className="block text-gray-700 font-medium mb-2">
-    Issue Description <span className="text-red-500">*</span>
-  </label>
-  <textarea
-    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"
-    rows="4"
-    placeholder="Describe the issue..."
-    value={formData.description}
-    onChange={(e) =>
-      setFormData({ ...formData, description: e.target.value })
-    }
-  />
-
-  {/* Voice input button */}
-  <div className="mt-2 flex items-center gap-3">
-    <button
-      onClick={listening ? stopVoiceRecognition : handleVoiceToText}
-      className={`px-4 py-2 rounded-xl flex items-center gap-2 ${
-        listening ? "bg-red-600 text-white animate-pulse" : "bg-blue-600 text-white"
-      }`}
-    >
-      {listening ? "Listening..." : "Click to Speak"}
-      <MicrophoneIcon className="w-5 h-5" />
-    </button>
-    {voiceError && <p className="text-sm text-red-500">{voiceError}</p>}
-  </div>
-</div>
-
+                <input type="text" name="title" placeholder="Issue Title" value={formData.title} onChange={handleChange} className="w-full px-4 py-3 border rounded-xl bg-white dark:bg-neutral-800 mb-3"/>
+                <select name="category" value={formData.category} onChange={handleChange} className="w-full px-4 py-3 border rounded-xl bg-white dark:bg-neutral-800 mb-3">
+                  <option value="">Select Category</option>
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select name="priority" value={formData.priority} onChange={handleChange} className="w-full px-4 py-3 border rounded-xl bg-white dark:bg-neutral-800 mb-3">
+                  {priorities.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <input type="text" name="city" value={formData.city} onChange={handleChange} placeholder="City" className="w-full px-4 py-3 border rounded-xl bg-white dark:bg-neutral-800 mb-3"/>
+                <textarea name="description" value={formData.description} onChange={handleChange} placeholder="Description" rows={4} className="w-full px-4 py-3 border rounded-xl bg-white dark:bg-neutral-800 mb-3"/>
+                {/* Voice */}
+                <button onClick={listening ? stopVoiceRecognition : handleVoiceToText} className={`px-4 py-2 rounded-xl flex items-center gap-2 ${listening ? "bg-red-600 animate-pulse text-white" : "bg-blue-600 text-white"}`}>
+                  {listening ? "Listening..." : "Click to Speak"} <MicrophoneIcon className="w-5 h-5"/>
+                </button>
+                {voiceError && <p className="text-red-500 text-sm">{voiceError}</p>}
               </div>
             )}
 
-            {/* Step 2: Location */}
+            {/* Step 2: Map */}
             {step === 2 && (
               <div className="space-y-6">
                 <div className="flex items-center gap-3 mb-4">
@@ -326,30 +294,24 @@ const stopVoiceRecognition = () => {
               </div>
             )}
 
-            {/* Step 3: Photos */}
+            {/* Step 3: Upload */}
             {step === 3 && (
               <div className="space-y-6">
                 <div className="flex items-center gap-3 mb-4">
                   <PhotoIcon className="h-6 w-6 text-blue-600" />
                   <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">Upload Photos</h2>
                 </div>
-                <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" id="image-upload" />
-                <label htmlFor="image-upload" className="cursor-pointer flex flex-col items-center border-2 border-dashed rounded-xl p-6 text-center hover:border-blue-500 transition-all">
-                  <PhotoIcon className="w-12 h-12 text-neutral-400 mb-2" />
+                <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" id="image-upload"/>
+                <label htmlFor="image-upload" className="cursor-pointer flex flex-col items-center border-2 border-dashed rounded-xl p-6 text-center hover:border-blue-500">
+                  <PhotoIcon className="w-12 h-12 text-neutral-400 mb-2"/>
                   <span>Click or drag files to upload</span>
                 </label>
                 {formData.images.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                     {formData.images.map((img, idx) => (
                       <div key={idx} className="relative group">
-                        <img src={img} className="w-full h-28 object-cover rounded-lg shadow" />
-                        <button
-                          type="button"
-                          onClick={() => removeImage(idx)}
-                          className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <XMarkIcon className="h-4 w-4" />
-                        </button>
+                        <p className="truncate">{img.name}</p>
+                        <button onClick={() => removeImage(idx)} className="absolute top-0 right-0 bg-red-600 text-white p-1 rounded-full"> <XMarkIcon className="w-4 h-4"/> </button>
                       </div>
                     ))}
                   </div>
@@ -360,68 +322,30 @@ const stopVoiceRecognition = () => {
             {/* Step 4: Review */}
             {step === 4 && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold mb-4">Review Your Report</h2>
-                <div className="space-y-4">
-                  {/* Basic Info */}
-                  <div className="p-4 rounded-xl border bg-white dark:bg-neutral-800 shadow-sm relative">
-                    <button className="absolute top-3 right-3 text-blue-600" onClick={() => setStep(1)}>
-                      <PencilSquareIcon className="w-5 h-5" />
-                    </button>
-                    <h3 className="font-semibold mb-2">Basic Info</h3>
-                    <p><strong>Title:</strong> {formData.title}</p>
-                    <p><strong>Category:</strong> {formData.category}</p>
-                    <p><strong>Priority:</strong> {formData.priority}</p>
-                  </div>
-
-                  {/* Description */}
-                  <div className="p-4 rounded-xl border bg-white dark:bg-neutral-800 shadow-sm relative">
-                    <button className="absolute top-3 right-3 text-blue-600" onClick={() => setStep(1)}>
-                      <PencilSquareIcon className="w-5 h-5" />
-                    </button>
-                    <h3 className="font-semibold mb-2">Description</h3>
-                    <p>{formData.description || "No description provided"}</p>
-                  </div>
-
-                  {/* Location */}
-                  <div className="p-4 rounded-xl border bg-white dark:bg-neutral-800 shadow-sm relative">
-                    <button className="absolute top-3 right-3 text-blue-600" onClick={() => setStep(2)}>
-                      <PencilSquareIcon className="w-5 h-5" />
-                    </button>
-                    <h3 className="font-semibold mb-2">Location</h3>
-                    <p>Lat {formData.location.lat.toFixed(6)}, Lng {formData.location.lng.toFixed(6)}</p>
-                  </div>
-
-                  {/* Photos */}
-                  <div className="p-4 rounded-xl border bg-white dark:bg-neutral-800 shadow-sm relative">
-                    <button className="absolute top-3 right-3 text-blue-600" onClick={() => setStep(3)}>
-                      <PencilSquareIcon className="w-5 h-5" />
-                    </button>
-                    <h3 className="font-semibold mb-2">Photos</h3>
-                    {formData.images.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-2">
-                        {formData.images.map((img, idx) => (
-                          <img key={idx} src={img} className="w-full h-20 object-cover rounded-lg" />
-                        ))}
-                      </div>
-                    ) : (
-                      <p>No photos uploaded</p>
-                    )}
-                  </div>
+                <h2 className="text-2xl font-bold mb-4">Review</h2>
+                <div className="p-4 rounded-xl border bg-white dark:bg-neutral-800 shadow-sm">
+                  <p><strong>Title:</strong> {formData.title}</p>
+                  <p><strong>Category:</strong> {formData.category}</p>
+                  <p><strong>Priority:</strong> {formData.priority}</p>
+                  <p><strong>City:</strong> {formData.city}</p>
+                  <p><strong>Description:</strong> {formData.description}</p>
+                  <p><strong>Lat/Lng:</strong> {formData.location.lat.toFixed(6)}, {formData.location.lng.toFixed(6)}</p>
+                  <p><strong>Photos:</strong> {formData.images.length} uploaded</p>
                 </div>
               </div>
             )}
 
             {/* Navigation */}
             <div className="flex justify-between mt-6">
-              <button type="button" onClick={prevStep} disabled={step === 1} className="px-6 py-3 rounded-xl bg-neutral-200 dark:bg-neutral-700">
-                <ArrowLeftIcon className="w-5 h-5 inline" /> Back
+              <button onClick={prevStep} disabled={step===1} className="px-6 py-3 rounded-xl bg-neutral-200 dark:bg-neutral-700">
+                <ArrowLeftIcon className="w-5 h-5 inline"/> Back
               </button>
               {step < 4 ? (
-                <button type="button" onClick={nextStep} className="px-6 py-3 rounded-xl bg-blue-600 text-white">
-                  Next <ArrowRightIcon className="w-5 h-5 inline" />
+                <button onClick={nextStep} className="px-6 py-3 rounded-xl bg-blue-600 text-white">
+                  Next <ArrowRightIcon className="w-5 h-5 inline"/>
                 </button>
               ) : (
-                <button type="button" onClick={handleSubmit} disabled={loading} className="px-6 py-3 rounded-xl bg-green-600 text-white">
+                <button onClick={handleSubmit} disabled={loading} className="px-6 py-3 rounded-xl bg-green-600 text-white">
                   {loading ? "Submitting..." : "Submit"}
                 </button>
               )}

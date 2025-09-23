@@ -154,42 +154,117 @@ async function requireAdmin(req, res, next) {
 
 
 // ------------ AUTH ROUTES ------------
+// Signup endpoint
 app.post("/signup", async (req, res) => {
   try {
     const { name, email, password, phone, lat, lng, role } = req.body;
-    if (!name || !email || !password || !role) return res.status(400).json({ error: "Missing fields" });
+    if (!name || !email || !password || !role)
+      return res.status(400).json({ error: "Missing fields" });
+
+    let userRecord;
+
+    try {
+      // Check if user exists in Firebase Auth
+      userRecord = await auth.getUserByEmail(email);
+
+      // User exists → check Firestore
+      const snap = await db.collection("users").doc(userRecord.uid).get();
+      const data = snap.data();
+
+      if (!data) return res.status(400).json({ error: "User exists in Auth but not in DB" });
+
+      if (data.otp === null) {
+        // OTP null → already verified → block signup
+        return res.status(400).json({ error: "Email already registered" });
+      } else {
+        // OTP pending → resend OTP
+        const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpires = Date.now() + 10 * 60 * 1000;
+
+        await sendEmail(email, "OTP Verification", `Your OTP is ${newOtp}`);
+        await db.collection("users").doc(userRecord.uid).update({
+          otp: newOtp,
+          otpExpires,
+          password, // optional: update password if changed
+          name,
+          phone: phone || null,
+          lat: lat || null,
+          lng: lng || null,
+          role,
+        });
+
+        return res.json({ message: "OTP resent", uid: userRecord.uid });
+      }
+    } catch (err) {
+      // User does not exist → safe to create
+      userRecord = await auth.createUser({ email, password, displayName: name });
+    }
+
+    // Reverse geocode if coordinates provided
     let address = "";
     if (lat && lng) address = await reverseGeocodeOSM(lat, lng);
-    const userRecord = await auth.createUser({ email, password, displayName: name });
-    let approved = role === "citizen";
-    let otp = null, otpExpires = null;
-    if (!approved) {
-      otp = Math.floor(100000 + Math.random() * 900000).toString();
-      otpExpires = Date.now() + 10 * 60 * 1000;
-      await sendEmail(email, "OTP", `Your OTP is ${otp}`);
-    }
+
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = Date.now() + 10 * 60 * 1000;
+
+    await sendEmail(email, "OTP Verification", `Your OTP is ${otp}`);
+
     await db.collection("users").doc(userRecord.uid).set({
-      uid: userRecord.uid, name, email, phone: phone || null,
-      address, lat: lat || null, lng: lng || null,
-      role: approved ? role : `pending_${role}`, approved, otp, otpExpires,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
+      uid: userRecord.uid,
+      name,
+      email,
+      phone: phone || null,
+      address,
+      lat: lat || null,
+      lng: lng || null,
+      role,
+      approved: false,
+      otp,
+      otpExpires,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    res.json({ message: approved ? "Registered" : "OTP sent", uid: userRecord.uid });
+
+    res.json({ message: "OTP sent", uid: userRecord.uid });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
+
+
+// OTP verification endpoint
 app.post("/verify-otp", async (req, res) => {
   const { uid, otp } = req.body;
   const ref = db.collection("users").doc(uid);
   const snap = await ref.get();
-  if (!snap.exists) return res.status(404).json({ error: "Not found" });
+
+  if (!snap.exists) return res.status(404).json({ error: "User not found" });
+
   const data = snap.data();
+
+  if (!data.otp) return res.status(400).json({ error: "OTP already verified" });
+
+  // Check if OTP is expired
+  if (data.otpExpires && Date.now() > data.otpExpires) {
+    return res.status(400).json({ error: "OTP has expired. Please request a new one." });
+  }
+
   if (data.otp !== otp) return res.status(400).json({ error: "Invalid OTP" });
-  await ref.update({ approved: true, role: data.role.replace("pending_", ""), otp: null, otpExpires: null });
+
+  // OTP is valid → mark approved
+  await ref.update({
+    approved: true,
+    role: data.role.replace("pending_", ""),
+    otp: null,
+    otpExpires: null,
+  });
+
   res.json({ message: "Verified" });
 });
+
+
+
 
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;

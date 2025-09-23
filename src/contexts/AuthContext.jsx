@@ -1,6 +1,9 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect } from "react"
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth"
+import { doc, setDoc, getDoc } from "firebase/firestore"
+import { auth, db } from "../lib/firebase"
 
 const AuthContext = createContext()
 
@@ -17,59 +20,90 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check for stored user data on app load
-    const storedUser = localStorage.getItem("user")
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
-    }
-    setLoading(false)
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Fetch user role from Firestore
+        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
+        const userData = userDoc.data()
+        setUser({
+          id: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: userData?.name || firebaseUser.displayName,
+          role: userData?.role || "citizen",
+          ward: userData?.ward,
+          phone: userData?.phone,
+        })
+      } else {
+        setUser(null)
+      }
+      setLoading(false)
+    })
+
+    return () => unsubscribe()
   }, [])
 
   const login = async (credentials) => {
-    // Mock login API call
     try {
-      const mockUser = {
-        id: "1",
-        name: credentials.email === "admin@civic.gov" ? "Admin User" : "John Doe",
-        email: credentials.email,
-        role:
-          credentials.email === "admin@civic.gov"
-            ? "admin"
-            : credentials.email === "staff@civic.gov"
-              ? "staff"
-              : "citizen",
-        ward: "Ward 12",
-        phone: "+91 9876543210",
+      const userCredential = await signInWithEmailAndPassword(auth, credentials.email, credentials.password)
+      const firebaseUser = userCredential.user
+
+      // Fetch user role from Firestore
+      const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
+      const userData = userDoc.data()
+
+      const userInfo = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email,
+        name: userData?.name || firebaseUser.displayName,
+        role: userData?.role || "citizen",
+        ward: userData?.ward,
+        phone: userData?.phone,
       }
 
-      setUser(mockUser)
-      localStorage.setItem("user", JSON.stringify(mockUser))
-      return { success: true, user: mockUser }
+      setUser(userInfo)
+      return { success: true, user: userInfo }
     } catch (error) {
-      return { success: false, error: "Login failed" }
+      return { success: false, error: error.message }
     }
   }
 
   const signup = async (userData) => {
-    // Mock signup API call
     try {
-      const newUser = {
-        id: Date.now().toString(),
-        ...userData,
+      const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password)
+      const firebaseUser = userCredential.user
+
+      // Store user data in Firestore
+      await setDoc(doc(db, "users", firebaseUser.uid), {
+        name: userData.name,
+        email: userData.email,
+        phone: userData.phone,
+        ward: userData.ward,
         role: userData.role || "citizen",
+      })
+
+      const newUser = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email,
+        name: userData.name,
+        role: userData.role || "citizen",
+        ward: userData.ward,
+        phone: userData.phone,
       }
 
       setUser(newUser)
-      localStorage.setItem("user", JSON.stringify(newUser))
       return { success: true, user: newUser }
     } catch (error) {
-      return { success: false, error: "Signup failed" }
+      return { success: false, error: error.message }
     }
   }
 
-  const logout = () => {
-    setUser(null)
-    localStorage.removeItem("user")
+  const logout = async () => {
+    try {
+      await signOut(auth)
+      setUser(null)
+    } catch (error) {
+      console.error("Logout error:", error)
+    }
   }
 
   const value = {
