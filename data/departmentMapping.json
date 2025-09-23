@@ -1,0 +1,62 @@
+{
+  "Potholes / Broken Roads": {
+    "department": "Public Works Department (PWD), Jharkhand",
+    "tips": ["Avoid this route until repaired", "Use alternate nearby road"]
+  },
+  "Broken Footpaths": {
+    "department": "Municipal Corporation (Nagar Nigam)",
+    "tips": ["Walk carefully, avoid damaged path", "Report to local ward member"]
+  },
+  "Traffic Signal Not Working": {
+    "department": "Traffic Police (Jharkhand Police)",
+    "tips": ["Follow manual traffic rules", "Alert nearby vehicles"]
+  },
+  "Streetlight Not Working": {
+    "department": "Municipal Corporation (Electricity/Streetlight Wing)",
+    "tips": ["Use caution at night", "Report exact location"]
+  },
+  "Overflowing Garbage Bins": {
+    "department": "Municipal Corporation (Sanitation Dept.)",
+    "tips": ["Avoid nearby area", "Keep safe distance from waste"]
+  },
+  "Dirty / Non-functional Public Toilets": {
+    "department": "Municipal Corporation (Sanitation Dept.)",
+    "tips": ["Use alternative toilets nearby", "Report sanitation issues"]
+  },
+  "Blocked Drainage / Sewer Overflow": {
+    "department": "Municipal Corporation (Drainage Dept.)",
+    "tips": ["Avoid walking through water", "Notify local ward member"]
+  },
+  "Water Leakage / Irregular Supply": {
+    "department": "Jharkhand Urban Drinking Water & Sewerage Board (Jal Nigam)",
+    "tips": ["Use alternate water sources", "Report exact location"]
+  },
+  "Waterlogging on Roads": {
+    "department": "Municipal Corporation (Drainage Dept.)",
+    "tips": ["Use alternate route", "Avoid driving in waterlogged area"]
+  },
+  "Air / Noise Pollution Hotspot": {
+    "department": "Jharkhand State Pollution Control Board (JSPCB)",
+    "tips": ["Limit exposure", "Use protective mask if needed"]
+  },
+  "Poor Lighting in Public Area": {
+    "department": "Municipal Corporation (Streetlight Wing)",
+    "tips": ["Avoid area at night", "Carry a torch/flashlight"]
+  },
+  "Unsafe Pedestrian Crossing": {
+    "department": "Traffic Police (Jharkhand Police)",
+    "tips": ["Use safe crossing points", "Inform authorities for repair"]
+  },
+  "Vandalism / Damage to Public Property": {
+    "department": "Local Police Station + Municipal Corporation",
+    "tips": ["Avoid the area", "Notify local authorities immediately"]
+  },
+  "Park / Playground Not Maintained": {
+    "department": "Municipal Corporation (Parks & Horticulture Dept.)",
+    "tips": ["Use alternate recreational areas", "Report broken equipment"]
+  },
+  "Illegal Construction / Encroachment": {
+    "department": "Municipal Corporation (Enforcement Wing) / Ranchi Regional Development Authority (RRDA)",
+    "tips": ["Avoid area", "Submit complaint with exact location"]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "Deoghar": {
+    "1": { "name": "Ward 1", "members": ["Member A", "Member B"] },
+    "2": { "name": "Ward 2", "members": ["Member C"] }
+  },
+  "Katras": {
+    "1": { "name": "Ward 1", "members": ["Member X"] }
+  }
+}
