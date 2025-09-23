@@ -1,0 +1,6 @@
+{
+  "Deoghar": {
+    "1": { "minLat": 24.47, "maxLat": 24.49, "minLon": 86.67, "maxLon": 86.69, "members": ["Member A","Member B"] },
+    "2": { "minLat": 24.49, "maxLat": 24.51, "minLon": 86.69, "maxLon": 86.71, "members": ["Member C"] }
+  }
+}
