@@ -292,7 +292,7 @@ console.log("Total files attached in all issues:", totalFiles);
 
           {/* Sidebar */}
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-            {/* Issue Status Chart */}
+            {/* Issue Status Chart 
 <div className="bg-white dark:bg-neutral-800 rounded-2xl p-6 shadow-lg border border-neutral-200 dark:border-neutral-700">
   <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-6">
     Your Issues Status
@@ -306,10 +306,10 @@ console.log("Total files attached in all issues:", totalFiles);
 
         return (
           <div key={idx} className="flex flex-col items-center relative w-20">
-            {/* Connector line */}
+            {/* Connector line 
             {idx < issueStatuses.length - 1 && (
               <div className="absolute top-3 left-1/2 w-full h-1 -translate-x-1/2 flex">
-                {/* Left half */}
+                {/* Left half 
                 <div
                   className="h-1 rounded-l-full"
                   style={{
@@ -317,7 +317,7 @@ console.log("Total files attached in all issues:", totalFiles);
                     backgroundColor: isDone || isCurrent ? "#10b981" : "#d1d5db",
                   }}
                 />
-                {/* Right half */}
+                {/* Right half 
                 <div
                   className="h-1 rounded-r-full"
                   style={{
@@ -328,7 +328,7 @@ console.log("Total files attached in all issues:", totalFiles);
               </div>
             )}
 
-            {/* Step circle */}
+            {/* Step circle 
             <div
               className="w-6 h-6 rounded-full border-2 border-white dark:border-neutral-800 z-10 flex items-center justify-center text-xs font-bold text-white"
               style={{ backgroundColor: isDone || isCurrent ? "#10b981" : "#d1d5db" }}
@@ -340,7 +340,7 @@ console.log("Total files attached in all issues:", totalFiles);
               )}
             </div>
 
-            {/* Step title */}
+            {/* Step title 
             <span className="mt-2 text-sm text-neutral-700 dark:text-neutral-300 text-center">
               {status.title}
             </span>
@@ -356,7 +356,7 @@ console.log("Total files attached in all issues:", totalFiles);
       </div>
     </div>
   )}
-</div>
+</div>*/}
 
 
             {/* Community Activity */}
