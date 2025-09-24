@@ -21,38 +21,60 @@ import { mockIssues, mockDemands, mockAnalytics } from "../../utils/mockData"
 const CitizenDashboard = () => {
   const { user } = useAuth()
   const [recentIssues, setRecentIssues] = useState([])
+  const [issues, setIssues] = useState([]);
   const [stats, setStats] = useState({
     reported: 0,
     inProgress: 0,
     resolved: 0,
     demands: 0,
     currentStep: 0,
+    
+  totalFiles: 0, // add this
   })
 
-  useEffect(() => {
-    if (!user) return
+ useEffect(() => {
+  if (!user) return;
 
-    // Filter issues reported by current user
-    const userIssues = mockIssues.filter((issue) => issue.reportedBy === user.name)
-    setRecentIssues(userIssues.slice(0, 3))
+  // 1️⃣ Get all issues from localStorage
+  const stored = JSON.parse(localStorage.getItem("issues")) || [];
 
-    // Calculate user stats
-    const reportedCount = userIssues.length
-    const inProgressCount = userIssues.filter((issue) => issue.status === "In Progress").length
-    const resolvedCount = userIssues.filter((issue) => issue.status === "Resolved").length
+  // 2️⃣ Remove duplicates using token
+  const uniqueIssuesMap = {};
+  stored.forEach((issue) => {
+    if (!uniqueIssuesMap[issue.token]) {
+      uniqueIssuesMap[issue.token] = issue;
+    }
+  });
+  const uniqueIssues = Object.values(uniqueIssuesMap).reverse(); // latest first
+  setIssues(uniqueIssues);
 
-    // Determine currentStep for progress chart
-    const currentStep =
-      resolvedCount > 0 ? 3 : inProgressCount > 0 ? 2 : reportedCount > 0 ? 1 : 0
+  // 3️⃣ Filter issues reported by current user
+  const userIssues = uniqueIssues.filter((issue) => issue.reportedBy === user.name);
+  // Assuming issues is your state array
+const totalFiles = issues.reduce((acc, issue) => acc + (issue.files?.length || 0), 0);
 
-    setStats({
-      reported: reportedCount,
-      inProgress: inProgressCount,
-      resolved: resolvedCount,
-      demands: mockDemands.length,
-      currentStep,
-    })
-  }, [user])
+console.log("Total files attached in all issues:", totalFiles);
+
+
+  // 4️⃣ Recent 3 issues
+  setRecentIssues(userIssues.slice(0, 3));
+
+  // 5️⃣ Aggregate stats
+  const stats = {
+    reported: userIssues.length,
+    inProgress: userIssues.filter((i) => i.status === "In Progress").length,
+    resolved: userIssues.filter((i) => i.status === "Resolved").length,
+    demands: mockDemands.length,
+    currentStep: 0,
+  };
+
+  if (stats.resolved > 0) stats.currentStep = 3;
+  else if (stats.inProgress > 0) stats.currentStep = 2;
+  else if (stats.reported > 0) stats.currentStep = 1;
+
+  setStats(stats);
+}, [user]);
+
 
   const quickActions = [
     {
@@ -216,52 +238,55 @@ const CitizenDashboard = () => {
             </div>
 
             {/* Recent Issues */}
-            <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-6">Recent Issues</h2>
-            <div className="space-y-4">
-              {recentIssues.length > 0 ? (
-                recentIssues.map((issue) => (
-                  <motion.div
-                    key={issue.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white dark:bg-neutral-800 rounded-2xl p-6 shadow-lg border border-neutral-200 dark:border-neutral-700"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          {getStatusIcon(issue.status)}
-                          <h3 className="font-semibold text-neutral-900 dark:text-white">{issue.title}</h3>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(issue.status)}`}>
-                            {issue.status}
-                          </span>
-                        </div>
-                        <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-2">{issue.description}</p>
-                        <div className="flex items-center space-x-4 text-xs text-neutral-500 dark:text-neutral-500">
-                          <span>#{issue.id}</span>
-                          <span>{issue.category}</span>
-                          <span>{issue.address}</span>
-                          <span>{new Date(issue.createdAt).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))
-              ) : (
-                <div className="bg-white dark:bg-neutral-800 rounded-2xl p-8 shadow-lg border border-neutral-200 dark:border-neutral-700 text-center">
-                  <MapPinIcon className="w-12 h-12 text-neutral-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">No Issues Reported</h3>
-                  <p className="text-neutral-600 dark:text-neutral-400 mb-4">
-                    You haven't reported any issues yet. Start by reporting your first civic issue.
-                  </p>
-                  <Link
-                    to="/citizen/report"
-                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
-                  >
-                    <PlusIcon className="w-4 h-4 mr-2" />
-                    Report Issue
-                  </Link>
-                </div>
-              )}
+<h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-4">All Issues</h2>
+<div className="space-y-4">
+  {issues.length > 0 ? (
+    issues.map((issue) => (
+      <motion.div
+        key={issue.token || issue.id}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white dark:bg-neutral-800 rounded-2xl p-6 shadow-lg border border-neutral-200 dark:border-neutral-700"
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center space-x-3 mb-2">
+              {getStatusIcon(issue.status)}
+              <h3 className="font-semibold text-neutral-900 dark:text-white">{issue.title}</h3>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(issue.status)}`}>
+                {issue.status}
+              </span>
+            </div>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-2">{issue.description}</p>
+            <div className="flex items-center space-x-4 text-xs text-neutral-500 dark:text-neutral-400">
+              <span>#{issue.token || issue.id}</span>
+              <span>{issue.category}</span>
+              <span>{issue.city}</span>
+              <span>{issue.createdAt ? new Date(issue.createdAt).toLocaleDateString() : "N/A"}</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    ))
+  ) : (
+    <div className="bg-white dark:bg-neutral-800 rounded-2xl p-8 shadow-lg border border-neutral-200 dark:border-neutral-700 text-center">
+      <MapPinIcon className="w-12 h-12 text-neutral-400 mx-auto mb-4" />
+      <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">No Issues Reported</h3>
+      <p className="text-neutral-600 dark:text-neutral-400 mb-4">
+        You haven't reported any issues yet. Start by reporting your first civic issue.
+      </p>
+      <Link
+        to="/citizen/report"
+        className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+      >
+        <PlusIcon className="w-4 h-4 mr-2" />
+        Report Issue
+      </Link>
+    </div>
+  )}
+
+
+
             </div>
           </motion.div>
 

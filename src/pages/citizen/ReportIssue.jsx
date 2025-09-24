@@ -42,16 +42,59 @@ const ReportIssue = () => {
     token: "",
   })
 
+  // 🏙 Ward mapping
+const wardMapping = {
+  "Deoghar": {
+    "1": { name: "Ward 1", members: ["Jay Prakash", "Asha Kumari"] },
+    "2": { name: "Ward 2", members: ["Kaushal Rai", "Abhinash Kumar"] },
+    "3": { name: "Ward 3", members: ["Naresh Prasad", "Vandana Sharma"] }
+  },
+  "Katras": {
+    "1": { name: "Ward 1", members: ["Mohd. Keshar", "Afroj"] },
+    "2": { name: "Ward 2", members: ["Member Y", "Member Z"] }
+  }
+};
+
+// 🎲 Random ward picker
+function pickRandomWard(city) {
+  const wards = wardMapping[city] || { "0": { name: "Default Ward", members: ["Default Member"] } };
+  const wardNos = Object.keys(wards);
+  const randomWardNo = wardNos[Math.floor(Math.random() * wardNos.length)];
+  return { wardNo: randomWardNo, wardInfo: wards[randomWardNo] };
+}
+
+// 💡 Random tips
+function generateRandomTips() {
+  const tipsArray = [
+    "Take photos before submitting report",
+    "Ensure the location is correct",
+    "Provide as much detail as possible",
+    "Follow up in 48 hours",
+    "Share with local ward members"
+  ];
+  return tipsArray[Math.floor(Math.random() * tipsArray.length)];
+}
+
+
   const categories = [
-    "Infrastructure",
-    "Roads",
-    "Water Supply",
-    "Waste Management",
-    "Street Lighting",
-    "Public Transport",
-    "Parks & Recreation",
-    "Others",
-  ]
+  "Potholes / Broken Roads",
+  "Broken Footpaths",
+  "Traffic Signal Not Working",
+  "Streetlight Not Working",
+  "Overflowing Garbage Bins",
+  "Dirty / Non-functional Public Toilets",
+  "Blocked Drainage / Sewer Overflow",
+  "Water Leakage / Irregular Supply",
+  "Waterlogging on Roads",
+  "Air / Noise Pollution Hotspot",
+  "Poor Lighting in Public Area",
+  "Unsafe Pedestrian Crossing",
+  "Vandalism / Damage to Public Property",
+  "Park / Playground Not Maintained",
+  "Illegal Construction / Encroachment",
+  "Others",
+]
+
   const priorities = ["Low", "Medium", "High", "Critical"]
 
   const handleChange = (e) =>
@@ -136,44 +179,81 @@ const ReportIssue = () => {
 
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"
 
-  // Submit handler
-  const handleSubmit = async () => {
-    setLoading(true)
-    try {
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-      if (!currentUser) throw new Error("User not logged in")
-      const token = await currentUser.getIdToken()
+// Submit handler
+const handleSubmit = async () => {
+  setLoading(true)
+  try {
+    const auth = getAuth()
+    const currentUser = auth.currentUser
+    if (!currentUser) throw new Error("User not logged in")
+    const token = await currentUser.getIdToken()
 
-      const form = new FormData()
-      form.append("title", formData.title)
-      form.append("category", formData.category)
-      form.append("priority", formData.priority)
-      form.append("description", formData.description)
-      form.append("address", formData.address || "Unknown Address")
-      form.append("lat", formData.location.lat)
-      form.append("lon", formData.location.lng)
-      form.append("city", formData.city)
+    const form = new FormData()
+    form.append("category", formData.category)
+    form.append("description", formData.description)
+    form.append("address", formData.address || "Unknown Address")
+    form.append("lat", formData.location.lat)
+    form.append("lon", formData.location.lng)
+    form.append("city", formData.city)
+    formData.images.forEach((file) => form.append("media", file))
 
-      formData.images.forEach((file) => form.append("media", file))
+    const res = await axios.post(`${BACKEND_URL}/report-issue`, form, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "multipart/form-data",
+      },
+    })
 
-      const res = await axios.post(`${BACKEND_URL}/report-issue`, form, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
-      })
+    // 🎲 Random ward & tips
+    const { wardNo, wardInfo } = pickRandomWard(formData.city)
 
-      console.log("Backend response:", res.data)
-      setFormData(prev => ({ ...prev, token: res.data.token }))
-      setStep(6)
-    } catch (err) {
-      console.error("Issue submission failed:", err.response?.data || err)
-      alert(err.response?.data?.error || err.message)
-    } finally {
-      setLoading(false)
+    // 👉 Make newIssue object
+    const newIssue = {
+      id: Date.now(), // simple unique id
+      title: formData.title,
+      description: formData.description,
+      category: formData.category,
+      priority: formData.priority,
+      city: formData.city,
+      address: formData.address,
+      location: formData.location,
+      images: formData.images.map((f) => f.name), // file names for now
+      token: res.data.token || "N/A",
+      department: res.data.department || "Public Works",
+      wardNo,
+      members: wardInfo.members,
+      tips: generateRandomTips(),
+      status: "Pending",
+      createdAt: new Date().toISOString(),
     }
+
+    // 👉 Save to localStorage
+    const stored = JSON.parse(localStorage.getItem("issues")) || []
+    stored.push(newIssue)
+    localStorage.setItem("issues", JSON.stringify(stored))
+
+    console.log("Backend response:", res.data)
+    console.log("Saved locally:", newIssue)
+
+    // update UI
+    setFormData((prev) => ({
+      ...prev,
+      token: newIssue.token,
+      wardNo: newIssue.wardNo,
+      members: newIssue.members,
+      department: newIssue.department,
+      tips: newIssue.tips,
+    }))
+
+    setStep(6) // success screen
+  } catch (err) {
+    console.error("Issue submission failed:", err.response?.data || err)
+    alert(err.response?.data?.error || err.message)
+  } finally {
+    setLoading(false)
   }
+}
+
 
   const nextStep = () => setStep((prev) => Math.min(prev + 1, 6))
   const prevStep = () => setStep((prev) => Math.max(prev - 1, 1))
@@ -203,47 +283,50 @@ const ReportIssue = () => {
 
         {/* Success */}
         {step === 6 && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center p-8 max-w-md mx-auto bg-white dark:bg-neutral-800 rounded-2xl shadow-lg"
-          >
-            <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircleIcon className="w-10 h-10 text-green-600 dark:text-green-400" />
-            </div>
-            <h2 className="text-3xl font-bold text-neutral-900 dark:text-white mb-4">Issue Reported!</h2>
-            <p className="text-neutral-600 dark:text-neutral-400 mb-6">
-              Token: <strong>{formData.token}</strong>
-            </p>
-            <div className="space-y-3">
-              <button
-                onClick={() => navigate("/citizen/track")}
-                className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 to-blue-700 text-white rounded-xl hover:from-blue-600 hover:to-blue-800 transition-all"
-              >
-                Track Your Issues
-              </button>
-              <button
-                onClick={() => {
-                  setStep(1)
-                  setFormData({
-                    title: "",
-                    description: "",
-                    category: "",
-                    priority: "Medium",
-                    location: { lat: 23.3441, lng: 85.3096 },
-                    city: "Deoghar",
-                    address: "",
-                    images: [],
-                    token: "",
-                  })
-                }}
-                className="w-full py-3 px-4 bg-neutral-200 dark:bg-neutral-700 text-neutral-900 dark:text-white rounded-xl hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors"
-              >
-                Report Another Issue
-              </button>
-            </div>
-          </motion.div>
-        )}
+  <motion.div className="text-center p-8 max-w-md mx-auto bg-white dark:bg-neutral-800 rounded-2xl shadow-lg">
+    <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+      <CheckCircleIcon className="w-10 h-10 text-green-600 dark:text-green-400" />
+    </div>
+    <h2 className="text-3xl font-bold text-neutral-900 dark:text-white mb-4">Issue Reported!</h2>
+
+    <div className="text-left text-neutral-700 dark:text-neutral-300 space-y-2">
+      <p><strong>Token:</strong> {formData.token}</p>
+      <p><strong>Ward No:</strong> {formData.wardNo}</p>
+      <p><strong>Department:</strong> {formData.department}</p>
+      <p><strong>Members:</strong> {formData.members.length > 0 ? formData.members.join(", ") : "No members found"}</p>
+      <p><strong>Tips:</strong> {formData.tips}</p>
+    </div>
+
+    <div className="space-y-3 mt-6">
+      <button onClick={() => navigate("/citizen/track")} className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 to-blue-700 text-white rounded-xl">
+        Track Your Issues
+      </button>
+      <button
+        onClick={() => {
+          setStep(1)
+          setFormData({
+            title: "",
+            description: "",
+            category: "",
+            priority: "Medium",
+            location: { lat: 23.3441, lng: 85.3096 },
+            city: "Deoghar",
+            address: "",
+            images: [],
+            token: "",
+            wardNo: "",
+            members: [],
+            department: "",
+            tips: ""
+          })
+        }}
+        className="w-full py-3 px-4 bg-neutral-200 dark:bg-neutral-700 text-neutral-900 dark:text-white rounded-xl"
+      >
+        Report Another Issue
+      </button>
+    </div>
+  </motion.div>
+)}
 
         {/* Steps */}
         {step !== 6 && (
@@ -357,4 +440,4 @@ const ReportIssue = () => {
   )
 }
 
-export default ReportIssue
+export default ReportIssue  

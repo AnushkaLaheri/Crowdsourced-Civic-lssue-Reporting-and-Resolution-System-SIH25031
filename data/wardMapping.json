@@ -1,9 +1,11 @@
 {
   "Deoghar": {
-    "1": { "name": "Ward 1", "members": ["Member A", "Member B"] },
-    "2": { "name": "Ward 2", "members": ["Member C"] }
-  },
+    "20": { "name": "Ward 20", "members": ["Aasha Devi"] },
+    "3": { "name": "Ward 3", "members": ["Bina Devi"] }
+  }
+,
+
   "Katras": {
-    "1": { "name": "Ward 1", "members": ["Member X"] }
+    "4": { "name": "Ward 4", "members": ["Bindu Sharma"] }
   }
 }

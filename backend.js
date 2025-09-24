@@ -346,6 +346,8 @@ app.get("/staff", verifyIdTokenMiddleware, async (req, res) => {
 
 // ------------ ISSUE ROUTES ------------
 
+// ------------ ISSUE ROUTES ------------
+
 app.post("/report-issue", verifyIdTokenMiddleware, upload.array("media", 3), async (req, res) => {
   try {
     let { category, description, address, lat, lon, city } = req.body;
